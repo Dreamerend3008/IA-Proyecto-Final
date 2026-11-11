@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+venv/
+.DS_Store
+# Particiones generadas (pesan ~80 MB): se regeneran con `python -m src.data_engineering`
+data/processed/train_*.csv
+data/processed/test_*.csv
