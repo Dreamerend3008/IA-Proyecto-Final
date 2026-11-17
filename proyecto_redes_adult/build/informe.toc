@@ -1,5 +1,0 @@
-\babel@toc {spanish}{}\relax 
-\contentsline {section}{\numberline {1}Comprensión del dataset}{3}{section.1}%
-\contentsline {subsection}{\numberline {1.1}Información y variable de predicción}{3}{subsection.1.1}%
-\contentsline {subsection}{\numberline {1.2}Distribución y correlaciones}{3}{subsection.1.2}%
-\contentsline {section}{\numberline {2}Preprocesamiento de la información}{4}{section.2}%

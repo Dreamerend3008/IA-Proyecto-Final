@@ -1,0 +1,385 @@
+% !TeX program = pdflatex
+% Plantilla breve basada en NTC 1486. Reemplace los datos entre corchetes.
+\documentclass[12pt,letterpaper,oneside]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage{helvet} % Familia sans serif similar a Arial
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage[top=3cm,bottom=3cm,left=4cm,right=2cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{bookmark}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{amsmath}
+\usepackage{sansmath}
+\sansmath
+\everydisplay{\large}
+
+\graphicspath{{reports/figures/}}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\setlist{nosep,leftmargin=*}
+\captionsetup{font=small,labelsep=period,justification=centering}
+\titleformat{\section}{\bfseries\centering\MakeUppercase}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\bfseries}{\thesubsection}{0.5em}{}
+\pagestyle{fancy}
+\setlength{\headheight}{15pt}
+\fancyhf{}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\newcommand{\fuente}{\par\centering\footnotesize Fuente: elaboración propia con datos de UCI Adult.}
+\newcommand{\fuenteN}{\par\centering\footnotesize Fuente: cuaderno de Python.}
+\newcommand{\fuenteP}{\par\centering\footnotesize Fuente: cuaderno de Juan Andrés Bravo.}
+\newcommand{\fuenteAI}{\par\centering\footnotesize Fuente: Elaboración hecha con el apoyo de inteligencia artificial.}
+
+\begin{document}
+
+% ---------------- Portada ICONTEC ----------------
+\begin{titlepage}
+    \centering
+    \thispagestyle{empty}
+    \vspace*{1cm}
+    {\bfseries Implementación de un modelo perceptrón y de redes neuronales\par}
+    \vfill
+    {\bfseries Juan Andrés Bravo, David Alejandro Dávila, Arturo Manrique, María José Zabala\par}
+    \vfill
+    {Trabajo presentado en la asignatura\\
+    Introducción a la Inteligencia Artificial\par}
+    \vspace{1cm}
+    {Docente: Julio Omar Palacio Niño\par}
+    \vfill
+    {\bfseries PONTIFICIA UNIVERSIDAD JAVERIANA\\
+    BOGOTÁ D. C.
+
+    \the\year\par}
+\end{titlepage}
+
+\setcounter{page}{2}
+\tableofcontents
+\thispagestyle{empty}
+\clearpage
+
+\section{Comprensión del dataset}
+
+\subsection{Información y variable de predicción}
+
+Adult (Census Income) reúne 48.842 registros del censo estadounidense de 1994 \cite{uci-adult}. Cada registro describe a una persona mediante 14 atributos demográficos, educativos y laborales: edad, tipo de empleo, educación, estado civil, ocupación, relación familiar, raza, sexo, ganancias y pérdidas de capital, horas trabajadas y país de origen, entre otros. Después de eliminar 52 duplicados quedan 48.790 registros.
+
+La variable objetivo es \texttt{target}: vale 1 si el ingreso anual supera USD~50.000 y 0 en caso contrario. Es, por tanto, un problema de clasificación binaria. La clase está desbalanceada: 76,1\,\% pertenece a \texttt{<=50K} y 23,9\,\% a \texttt{>50K}.
+
+
+\subsection{Distribución y correlaciones}
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}[t]{0.42\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{01_balance_clases.png}
+        \caption{Distribución de la variable objetivo.}
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.54\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{06_correlacion.png}
+        \caption{Correlación entre variables numéricas.}
+    \end{minipage}
+    \fuente
+\end{figure}
+
+La distribución confirma el desbalance de clases. Frente al objetivo, las mayores correlaciones lineales corresponden al nivel educativo (0,33), la edad (0,23), las horas semanales (0,23) y la ganancia de capital (0,22). Estas relaciones son moderadas, además, las variables categóricas aportan información que la matriz de Pearson no representa.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.83\textwidth]{02_hist_numericas.png}
+    \caption{Distribución de las variables numéricas.}
+    \fuente
+\end{figure}
+
+Los histogramas muestran una fuerte asimetría en las ganancias y pérdidas de capital, pues la mayoría de sus valores son cero, así como una alta dispersión en la edad y las horas trabajadas. Esto justifica transformar y normalizar los datos antes del entrenamiento.
+
+\section{Preprocesamiento de la información}
+
+Antes de transformar se divide el conjunto en entrenamiento y prueba de forma estratificada.
+
+\begin{itemize}
+    \item \textbf{Selección:} se elimina \texttt{education} porque duplica a \texttt{education\_num}. También se excluye \texttt{fnlwgt}, pues es un peso muestral y no una característica individual.
+    \item \textbf{Variables categóricas:} las variables categóricas se convierten mediante codificación unaria. Las columnas de prueba se alinean con las de entrenamiento. Así, la red recibe valores numéricos sin imponer un orden artificial entre categorías.
+    \item \textbf{Valores nulos:} el símbolo ``?'' se interpreta como nulo. Aparece en \texttt{workclass} (5,73\,\%), \texttt{occupation} (5,75\,\%) y \texttt{native\_country} (1,75\,\%). Se aplica la moda calculada en entrenamiento.
+    \item \textbf{Normalización:} edad, nivel educativo, ganancias, pérdidas y horas semanales se estandarizan con z-score usando la media y desviación del conjunto de entrenamiento. Esto evita que las escalas mayores dominen el aprendizaje de la red.
+    \item \textbf{Datos atípicos:} se detectan mediante boxplots y percentiles. Edad, horas, ganancias y pérdidas se limitan entre los percentiles 1 y 99 del entrenamiento, sin borrar personas válidas. Además, \texttt{capital\_gain} y \texttt{capital\_loss} reciben $\log(1+x)$ para suavizar su asimetría.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}[t]{0.56\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{03_boxplots_outliers.png}
+        \caption{Búsqueda de datos atípicos.}
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.40\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{04_nulos.png}
+        \caption{Porcentaje de valores nulos.}
+    \end{minipage}
+    \fuente
+\end{figure}
+
+Finalmente, se utiliza la biblioteca \texttt{scikit-learn} para generar cuatro particiones estratificadas, con proporciones de prueba de 0,1, 0,2, 0,3 y 0,4. Estas corresponden, respectivamente, a 4.879, 9.758, 14.637 y 19.516 observaciones de prueba, los conjuntos de entrenamiento contienen 43.911, 39.032, 34.153 y 29.274 observaciones.
+
+El tratamiento conserva la mayor cantidad de observaciones, reduce el efecto de extremos y produce entradas numéricas comparables. La partición estratificada mantiene la proporción de clases.
+
+
+\section{Modelo perceptrón}
+
+El perceptrón es un modelo lineal de clasificación que busca separar las observaciones en dos clases mediante una ecuacion lineal:
+
+\[
+\hat{y} = \sum_{i=1}^{n} w_i \, x_i + b
+\]
+
+donde $w_i$ representa el peso de cada entrada $x_i$ y $b$ es el sesgo.
+
+Su proceso de entrenamiento consta de los siguientes pasos:
+
+\textbf{1. Inicialización:} se inicializan los pesos y el sesgo con valores aleatorios.
+\\
+\textbf{2. Propagación hacia adelante:} se calcula $\hat{y}$, la salida del perceptrón para cada muestra de entrenamiento.
+\\
+\textbf{3. Cálculo del error:} se compara la salida del perceptrón con la salida esperada $y$ y se calcula el error $e = y - \hat{y}$.
+\\
+\textbf{4. Actualización:} se ajustan los pesos y el sesgo en función del error calculado.
+\\
+\[
+\begin{aligned}
+    w_i &\leftarrow w_i + \alpha \, e \, x_i, \\
+    b   &\leftarrow b + \alpha \, e.
+\end{aligned}
+\]
+
+Los pasos 2 a 4 se repiten hasta que el error sea suficientemente pequeño o se alcance un número máximo de iteraciones.
+
+\begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{perceptron.png}
+        \caption{Representación de un perceptrón.}
+        \fuenteP
+\end{figure}
+
+Para este modelo se utilizó una implementación clásica de un perceptrón en Python, desarrollada exclusivamente con la biblioteca \texttt{NumPy}.
+
+Durante el entrenamiento se encontró que, con las 88 entradas, el número de errores no se estabilizaba ni presentaba una tendencia decreciente, por el contrario, tenía un comportamiento errático. Esto sugiere que las clases del conjunto de datos no son linealmente separables en el espacio de características utilizado. Se intentó reducir el número de entradas para obtener un resultado más estable. Aunque la curva mejoró ligeramente, conservó el comportamiento irregular que se observa en la figura 7. Por ello, el perceptrón no logra una clasificación adecuada para este problema.
+
+\begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{lossPerceptron.png}
+        \caption{Número de errores por época durante el entrenamiento del perceptrón.}
+        \fuenteN
+\end{figure}
+
+
+\section{Red Neuronal}
+
+Una red neuronal es un modelo de aprendizaje automático inspirado en el cerebro humano. Consiste en capas de nodos (neuronas) interconectados que procesan información y aprenden patrones a partir de datos. Cada nodo aplica una función de activación a la suma ponderada de sus entradas, permitiendo a la red capturar relaciones no lineales.
+
+\begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{deep_neural_network.png}
+        \caption{Visualización de una red neuronal.}
+        \fuenteP
+\end{figure}
+
+Una red neuronal se compone de:
+\begin{itemize}
+    \item \textbf{Capa de entrada:} recibe los datos de entrada y los pasa a la siguiente capa.
+    \item \textbf{Capas ocultas:} procesan la información mediante funciones de activación y aprenden patrones complejos.
+    \item \textbf{Capa de salida:} produce la predicción final del modelo.
+\end{itemize}
+
+Además, cada capa de la red neuronal tiene pesos y sesgos que se ajustan durante el entrenamiento.
+
+El algoritmo de entrenamiento de una red neuronal es:
+\\
+\textbf{1. Inicialización:} se inicializan los pesos y sesgos con valores aleatorios.
+\\
+\textbf{2. Propagación hacia adelante:} se calcula la salida de la red para cada muestra de entrenamiento.
+\\
+\textbf{3. Cálculo del error:} se compara la salida de la red con la salida deseada.
+\\
+\textbf{4. Propagación hacia atrás:} se actualizan los pesos y sesgos para minimizar el error.
+\\
+\textbf{5. Repetición:} se repite el proceso de propagación hacia adelante y hacia atrás hasta alcanzar un criterio de convergencia.
+\\
+
+Para comprender en su totalidad las soluciones diseñadas en este proyecto es necesario profundizar en el funcionamiento de cada paso de una red neuronal.
+
+\subsection{Propagación hacia adelante}
+La propagación hacia adelante de una red neuronal es similar a la de un perceptrón, con la diferencia de que la salida de cada capa se convierte en la entrada de la siguiente. Por ejemplo, para una red neuronal con dos capas ocultas, el cálculo se realiza así:
+\[
+\begin{aligned}
+    Z_1 &= \sum_{i=1}^{n} w_{1,i} \, x_i + b_1,
+    & A_1 &= \operatorname{ReLU}(Z_1), \\[0.4em]
+    Z_2 &= \sum_{i=1}^{m} w_{2,i} \, A_{1,i} + b_2,
+    & A_2 &= \operatorname{ReLU}(Z_2), \\[0.4em]
+    Z_3 &= \sum_{i=1}^{k} w_{3,i} \, A_{2,i} + b_3,
+    & \hat{y} = A_3 &= \operatorname{sigmoide}(Z_3).
+\end{aligned}
+\]
+
+Después de realizar la propagación hacia adelante y obtener $A_3$, se evalúa este valor mediante una función de pérdida que permite calcular el error de la red. En este caso se utilizó la entropía cruzada binaria (BCE), cuya derivada se simplifica al combinarse con la función sigmoide de la capa de salida.
+
+\[
+L = -\frac{1}{m} \sum_{i=1}^{m}
+\left[y_i \log(\hat{y}_i) + (1-y_i)\log(1-\hat{y}_i)\right].
+\]
+
+\subsection{Propagación hacia atrás}
+
+Este proceso es más complejo que el ajuste de un perceptrón. Una red neuronal contiene múltiples pesos y sesgos distribuidos entre sus capas, por lo que se emplean técnicas de cálculo vectorial y la regla de la cadena para ajustar cada parámetro según su contribución a la función de pérdida. La derivación completa se encuentra documentada en las notas citadas en la bibliografía \cite{backprop-notes}; a continuación, se incluyen únicamente los resultados finales de las derivadas parciales:
+
+\[
+\begin{aligned}
+\delta_3^{(i)} &= \hat{y}_i - y_i, \\[0.4em]
+\frac{\partial L}{\partial \mathbf{W}_3}
+    &= \frac{1}{m} \sum_{i=1}^{m}
+       \left(\mathbf{a}_2^{(i)}\right)^T \delta_3^{(i)}, \\
+\frac{\partial L}{\partial b_3}
+    &= \frac{1}{m} \sum_{i=1}^{m} \delta_3^{(i)}.
+\end{aligned}
+\]
+
+\[
+\begin{aligned}
+\boldsymbol{\delta}_2^{(i)}
+    &= \left(\delta_3^{(i)} \mathbf{W}_3^T\right)
+       \odot \operatorname{ReLU}'\left(\mathbf{z}_2^{(i)}\right), \\[0.4em]
+\frac{\partial L}{\partial \mathbf{W}_2}
+    &= \frac{1}{m} \sum_{i=1}^{m}
+       \left(\mathbf{a}_1^{(i)}\right)^T \boldsymbol{\delta}_2^{(i)}, \\
+\frac{\partial L}{\partial \mathbf{b}_2}
+    &= \frac{1}{m} \sum_{i=1}^{m} \boldsymbol{\delta}_2^{(i)}.
+\end{aligned}
+\]
+
+\[
+\begin{aligned}
+\boldsymbol{\delta}_1^{(i)}
+    &= \left(\boldsymbol{\delta}_2^{(i)} \mathbf{W}_2^T\right)
+       \odot \operatorname{ReLU}'\left(\mathbf{z}_1^{(i)}\right), \\[0.4em]
+\frac{\partial L}{\partial \mathbf{W}_1}
+    &= \frac{1}{m} \sum_{i=1}^{m}
+       \left(\mathbf{x}^{(i)}\right)^T \boldsymbol{\delta}_1^{(i)}, \\
+\frac{\partial L}{\partial \mathbf{b}_1}
+    &= \frac{1}{m} \sum_{i=1}^{m} \boldsymbol{\delta}_1^{(i)}.
+\end{aligned}
+\]
+
+\subsection{Implementación}
+
+En este proyecto se implementaron dos redes neuronales. La primera tiene una capa oculta con el mismo número de neuronas que de entradas (88). La segunda tiene dos capas ocultas de 32 y 16 neuronas, respectivamente. Debido a la similitud entre ambas implementaciones, esta sección resume los fundamentos teóricos que comparten.
+
+
+\section{Análisis}
+
+\subsection{Rendimiento según el tamaño de la partición}
+
+% Perceptrón
+\begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{perceptron_performance_heatmap.png}
+        \caption{Matriz de calor de las métricas de desempeño del perceptrón.}
+        \fuenteN
+\end{figure}
+
+El perceptrón presenta un comportamiento inestable entre particiones. Su exactitud varía entre 66,6\,\% y 78,5\,\%, mientras que su medida F1 se mantiene entre 27,6\,\% y 52,9\,\%. En la partición 80/20 alcanza una exactitud de 78,5\,\%, pero solo identifica el 17,2\,\% de las personas con ingresos superiores a USD~50.000. Esta diferencia se explica por el desbalance de clases: predecir principalmente la clase mayoritaria puede producir una exactitud aparentemente alta, aunque el modelo omita gran parte de la clase positiva. Por tanto, la exactitud no debe interpretarse de forma aislada.
+
+% Red neuronal de una capa oculta
+\begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{single_hidden_equal_input_performance_heatmap.png}
+        \caption{Matriz de calor de las métricas de desempeño de la red neuronal de una capa oculta.}
+        \fuenteN
+\end{figure}
+
+La red con una capa oculta obtiene los resultados más altos y estables. Su exactitud permanece entre 84,6\,\% y 85,3\,\%, y su medida F1 entre 65,0\,\% y 66,5\,\%. Al pasar de 43.911 a 29.274 muestras de entrenamiento, la exactitud disminuye apenas 0,7 puntos porcentuales y la medida F1, 1,5 puntos. Esto indica que el modelo aprovecha bien el conjunto disponible y que su rendimiento no depende de una partición específica.
+
+% Red neuronal de dos capas ocultas
+\begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{deep_neural_network_performance_heatmap.png}
+        \caption{Matriz de calor de las métricas de desempeño de la red neuronal de dos capas ocultas.}
+        \fuenteN
+\end{figure}
+
+La red de dos capas ocultas también es estable: alcanza entre 82,8\,\% y 83,7\,\% de exactitud y entre 61,3\,\% y 63,3\,\% de medida F1. El aumento del tamaño de prueba de 4.879 a 19.516 observaciones reduce el tamaño de entrenamiento, pero apenas modifica sus métricas. Aunque una prueba más grande ofrece una estimación más representativa y menos sensible a casos particulares, deja menos datos para aprender. En este conjunto, dicho intercambio tiene un impacto pequeño sobre las dos redes neuronales, pero no corrige la limitación lineal del perceptrón.
+
+\subsection{Análisis de las matrices de confusión}
+
+Para comparar los tres modelos bajo las mismas condiciones, se toma la partición 80/20, que contiene 39.032 observaciones de entrenamiento y 9.758 de prueba. En el conjunto de prueba hay 7.422 casos de la clase mayoritaria y 2.336 de la clase positiva. Las matrices de confusión se resumen así:
+
+\begin{table}[H]
+    \centering
+    \caption{Resultados de las matrices de confusión para la partición 80/20.}
+    \begin{tabular}{lrrrr}
+        \hline
+        Modelo & VN & FP & FN & VP \\
+        \hline
+        Perceptrón & 7.256 & 166 & 1.935 & 401 \\
+        Red de una capa oculta & 6.847 & 575 & 927 & 1.409 \\
+        Red de dos capas ocultas & 6.750 & 672 & 993 & 1.343 \\
+        \hline
+    \end{tabular}
+    \fuenteAI
+\end{table}
+
+El perceptrón produce pocos falsos positivos, pero lo consigue a costa de 1.935 falsos negativos: deja sin identificar al 82,8\,\% de las personas de la clase positiva. Esta matriz confirma que su alta precisión para la clase positiva (70,7\,\%) no compensa su baja sensibilidad. La red de una capa oculta reduce los falsos negativos a 927 y obtiene 1.409 verdaderos positivos, el mejor equilibrio de los tres modelos. La red de dos capas ocultas presenta 993 falsos negativos y 1.343 verdaderos positivos; supera ampliamente al perceptrón, pero queda ligeramente por debajo de la red más sencilla.
+
+El tamaño del conjunto de prueba cambia los conteos absolutos de cada matriz: al pasar del 10\,\% al 40\,\%, el número de casos evaluados se cuadruplica. Por ello, los conteos de errores no deben compararse directamente entre particiones, sino mediante proporciones como precisión, sensibilidad y medida F1 \cite{sklearn-metrics}. Las particiones estratificadas conservan aproximadamente el 76,1\,\% de la clase mayoritaria y el 23,9\,\% de la clase positiva, de modo que las diferencias observadas responden principalmente al comportamiento de los modelos y al menor tamaño del conjunto de entrenamiento, no a un cambio en la distribución de clases.
+
+\subsection{Comparación entre los tres modelos}
+
+\begin{table}[H]
+    \centering
+    \caption{Comparación de métricas para la partición 80/20.}
+    \begin{tabular}{lrrrr}
+        \hline
+        Modelo & Exactitud & Precisión & Sensibilidad & F1 \\
+        \hline
+        Perceptrón & 0,785 & 0,707 & 0,172 & 0,276 \\
+        Red de una capa oculta & 0,846 & 0,710 & 0,603 & 0,652 \\
+        Red de dos capas ocultas & 0,829 & 0,667 & 0,575 & 0,617 \\
+        \hline
+    \end{tabular}
+    \fuenteAI
+\end{table}
+
+La red de una capa oculta ofrece el mejor rendimiento general en todas las particiones: supera a la red de dos capas por cerca de 1,6 puntos porcentuales de exactitud y entre 3,2 y 4,0 puntos de medida F1. La mayor profundidad no aporta una mejora en este problema y puede introducir una complejidad innecesaria. El perceptrón es el modelo menos adecuado, pues la frontera de decisión lineal no representa bien las relaciones del conjunto de datos y sus resultados cambian considerablemente entre particiones.
+
+\section{Conclusiones}
+
+Los tres modelos buscan clasificar correctamente la información; sin embargo, el perceptrón presenta un rendimiento deficiente debido a la naturaleza no lineal de los datos. Al no poder separar las clases mediante una unica ecuacion lineal, este modelo no representa adecuadamente los patrones del conjunto analizado.
+
+Las dos redes neuronales alcanzan rendimientos similares porque sus capas ocultas les permiten modelar relaciones no lineales y superar la principal limitación del perceptrón. Además, ambas responden de manera adecuada al desbalance inicial del conjunto de datos. Un modelo que predijera siempre la clase mayoritaria obtendría cerca de 76,1\,\% de exactitud, pero no identificaría a ninguna persona con ingresos superiores a USD~50.000. En cambio, las redes superan este valor y mantienen una sensibilidad cercana al 60\,\%, lo que demuestra que aprendieron patrones relevantes de ambas clases.
+
+Los tres modelos tienen ventajas y limitaciones. El perceptrón destaca por su simplicidad y su bajo costo computacional, pero resulta insuficiente para este problema. Las redes neuronales requieren mayor capacidad de cómputo, aunque compensan este costo con un mejor desempeño en relaciones no lineales. Entre las arquitecturas evaluadas, la red de una capa oculta ofrece el mejor equilibrio entre complejidad y rendimiento, por lo que constituye la alternativa más adecuada para la clasificación de este conjunto de datos.
+
+\begin{thebibliography}{9}
+
+\bibitem{uci-adult}
+Becker, B. y Kohavi, R. (1996). \textit{Adult} [conjunto de datos]. UCI Machine Learning Repository. \url{https://doi.org/10.24432/C5XW20}
+
+\bibitem{sklearn-metrics}
+Scikit-learn Developers. \textit{Metrics and scoring: quantifying the quality of predictions}. Documentación de scikit-learn. \url{https://scikit-learn.org/stable/modules/model_evaluation.html}
+
+\bibitem{backprop-notes}
+Bravo, J. A. \textit{Notas de derivación de la propagación hacia atrás}. Material de apoyo del proyecto. \url{https://livejaverianaedu-my.sharepoint.com/:b:/r/personal/bravomja_javeriana_edu_co/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Fbravomja%5Fjaveriana%5Fedu%5Fco%2FDocuments%2FProyecto%5F261115%5F103308%2Epdf&parent=%2Fpersonal%2Fbravomja%5Fjaveriana%5Fedu%5Fco%2FDocuments&share=cQrdzH0wofPHSYfynVjj6Zm1EgUC1ZkR3CtbB0wyOPUQSwQMxg}
+
+\end{thebibliography}
+
+\end{document}
